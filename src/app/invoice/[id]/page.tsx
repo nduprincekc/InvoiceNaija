@@ -45,6 +45,7 @@ export default function InvoiceViewPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPaid, setIsPaid] = useState(false)
+  const [sendingEmail, setSendingEmail] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -225,6 +226,37 @@ Thank you 🙏`
     }
   }
 
+  const sendEmail = async () => {
+    if (!invoice) return
+
+    setSendingEmail(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
+      const response = await fetch('/api/send-invoice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ invoiceId: id }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send email')
+      }
+
+      alert(`Invoice sent to ${invoice.client_email}! ✅`)
+    } catch (err: any) {
+      alert('Error sending email: ' + err.message)
+    } finally {
+      setSendingEmail(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -273,6 +305,13 @@ Thank you 🙏`
               className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"
             >
               📱 WhatsApp
+            </button>
+            <button
+              onClick={sendEmail}
+              disabled={sendingEmail}
+              className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sendingEmail ? 'Sending...' : '📧 Send Email'}
             </button>
             <button
               onClick={markAsPaid}

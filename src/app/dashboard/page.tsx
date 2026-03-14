@@ -50,6 +50,8 @@ const statusColors = {
 
 export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [showInstallBanner, setShowInstallBanner] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -73,6 +75,45 @@ export default function DashboardPage() {
     }
     checkAuth()
   }, [router])
+
+  useEffect(() => {
+    // Check if app is already installed
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    const isInstalled = localStorage.getItem('invoiceNaija-installed') === 'true'
+
+    if (!isStandalone && !isInstalled) {
+      const handleBeforeInstallPrompt = (e: any) => {
+        e.preventDefault()
+        setDeferredPrompt(e)
+        setShowInstallBanner(true)
+      }
+
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      }
+    }
+  }, [])
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt()
+      const { outcome } = await deferredPrompt.userChoice
+
+      if (outcome === 'accepted') {
+        localStorage.setItem('invoiceNaija-installed', 'true')
+        setShowInstallBanner(false)
+      }
+
+      setDeferredPrompt(null)
+    }
+  }
+
+  const dismissBanner = () => {
+    localStorage.setItem('invoiceNaija-installed', 'true')
+    setShowInstallBanner(false)
+  }
 
   const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.total, 0)
   const amountPaid = invoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.total, 0)
@@ -99,6 +140,35 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
+
+      {/* PWA Install Banner */}
+      {showInstallBanner && (
+        <div className="bg-[#FFB800] text-[#006B3C] px-4 py-3 relative">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">📱</span>
+              <p className="font-medium">
+                Add InvoiceNaija to your home screen for quick access!
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleInstall}
+                className="bg-[#006B3C] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#005a32] transition-colors"
+              >
+                Install
+              </button>
+              <button
+                onClick={dismissBanner}
+                className="text-[#006B3C] hover:text-[#004d26] p-1"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
 
