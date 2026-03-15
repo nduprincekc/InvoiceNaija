@@ -35,6 +35,8 @@ export default function SetupPage() {
   const [bankName, setBankName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
   const [accountName, setAccountName] = useState('')
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
@@ -50,6 +52,18 @@ export default function SetupPage() {
     checkUser()
   }, [router])
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setLogoFile(file)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setLogoPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -58,6 +72,28 @@ export default function SetupPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
+
+      let logoUrl = null
+
+      // Upload logo if provided
+      if (logoFile) {
+        const fileExt = logoFile.name.split('.').pop()
+        const fileName = `${user.id}.${fileExt}`
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('logos')
+          .upload(fileName, logoFile, {
+            cacheControl: '3600',
+            upsert: false
+          })
+
+        if (uploadError) throw uploadError
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('logos')
+          .getPublicUrl(fileName)
+
+        logoUrl = publicUrl
+      }
 
       const { error } = await supabase
         .from('profiles')
@@ -68,7 +104,8 @@ export default function SetupPage() {
           bank_name: bankName,
           account_number: accountNumber,
           account_name: accountName,
-          plan: 'free'
+          plan: 'free',
+          logo_url: logoUrl
         })
 
       if (error) throw error
@@ -102,6 +139,24 @@ export default function SetupPage() {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#006B3C] focus:border-transparent"
               required
             />
+          </div>
+
+          <div>
+            <label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-1">
+              Business Logo (Optional)
+            </label>
+            <input
+              id="logo"
+              type="file"
+              accept="image/*"
+              onChange={handleLogoChange}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#006B3C] focus:border-transparent"
+            />
+            {logoPreview && (
+              <div className="mt-2">
+                <img src={logoPreview} alt="Logo preview" className="h-16 w-auto object-contain border rounded" />
+              </div>
+            )}
           </div>
 
           <div>

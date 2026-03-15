@@ -10,17 +10,23 @@ export default function Navbar() {
 
   useEffect(() => {
     const fetchPlan = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('plan')
-          .eq('id', user.id)
-          .single()
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('plan')
+            .eq('id', user.id)
+            .single()
 
-        if (profile?.plan) {
-          setPlan(profile.plan)
+          if (error) {
+            console.warn('Error fetching user plan:', error)
+          } else if (profile?.plan) {
+            setPlan(profile.plan)
+          }
         }
+      } catch (error) {
+        console.warn('Error in fetchPlan:', error)
       }
     }
 
@@ -28,8 +34,14 @@ export default function Navbar() {
   }, [])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/auth')
+    try {
+      await supabase.auth.signOut()
+      router.push('/auth')
+    } catch (error) {
+      console.warn('Error during logout:', error)
+      // Force redirect even if logout fails
+      router.push('/auth')
+    }
   }
 
   return (
@@ -52,6 +64,12 @@ export default function Navbar() {
               className="hover:text-[#FFB800] transition-colors"
             >
               Clients
+            </button>
+            <button
+              onClick={() => router.push('/profile')}
+              className="hover:text-[#FFB800] transition-colors"
+            >
+              Profile
             </button>
           </div>
         </div>

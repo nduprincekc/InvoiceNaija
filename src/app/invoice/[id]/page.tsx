@@ -36,6 +36,7 @@ interface Profile {
   account_number: string
   account_name: string
   plan?: string
+  logo_url?: string
 }
 
 export default function InvoiceViewPage() {
@@ -101,7 +102,11 @@ export default function InvoiceViewPage() {
 
     // Header
     doc.setFontSize(20)
-    doc.text('InvoiceNaija', 20, y)
+    if (profile.logo_url && profile.plan === 'premium') {
+      doc.text(profile.business_name, 20, y)
+    } else {
+      doc.text('InvoiceNaija', 20, y)
+    }
     doc.setFontSize(12)
     doc.text('Professional Invoicing Made Easy', 20, y + 10)
 
@@ -191,6 +196,8 @@ export default function InvoiceViewPage() {
   }
 
   const shareWhatsApp = () => {
+    if (!invoice || !profile) return
+
     const message = `Hi ${invoice.client_name}, please find your invoice #${invoice.invoice_number} from ${profile.business_name}.
 
 Amount Due: ₦${invoice.total.toLocaleString()}
@@ -325,8 +332,24 @@ Thank you 🙏`
           {/* Header */}
           <div className="flex justify-between items-start mb-12 pb-6 border-b-2 border-gray-300">
             <div>
-              <h3 className="text-3xl font-bold text-[#006B3C]">InvoiceNaija</h3>
-              <p className="text-sm text-gray-600">Professional Invoicing Made Easy</p>
+              {profile?.logo_url && profile?.plan === 'premium' ? (
+                <div className="flex items-center gap-4">
+                  <img
+                    src={profile.logo_url}
+                    alt={`${profile.business_name} logo`}
+                    className="h-12 w-auto object-contain"
+                  />
+                  <div>
+                    <h3 className="text-3xl font-bold text-[#006B3C]">{profile.business_name}</h3>
+                    <p className="text-sm text-gray-600">Professional Invoicing Made Easy</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-3xl font-bold text-[#006B3C]">InvoiceNaija</h3>
+                  <p className="text-sm text-gray-600">Professional Invoicing Made Easy</p>
+                </>
+              )}
             </div>
             <div className="text-right">
               <h4 className="text-xl font-semibold">INVOICE</h4>

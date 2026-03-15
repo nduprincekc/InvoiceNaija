@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Navbar from '@/components/Navbar'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 interface Invoice {
   id: string
@@ -12,6 +13,7 @@ interface Invoice {
   due_date: string
   total: number
   status: 'Draft' | 'Sent' | 'Paid' | 'Overdue'
+  created_at: string
 }
 
 const mockInvoices: Invoice[] = [
@@ -21,7 +23,8 @@ const mockInvoices: Invoice[] = [
     client_name: 'ABC Corp',
     total: 50000,
     due_date: '2024-03-20',
-    status: 'Paid'
+    status: 'Paid',
+    created_at: '2024-03-15T10:00:00Z'
   },
   {
     id: '2',
@@ -29,15 +32,62 @@ const mockInvoices: Invoice[] = [
     client_name: 'XYZ Ltd',
     total: 75000,
     due_date: '2024-03-15',
-    status: 'Sent'
+    status: 'Sent',
+    created_at: '2024-03-14T10:00:00Z'
   },
   {
     id: '3',
     invoice_number: 'INV-003',
-    client_name: 'Tech Solutions',
-    total: 100000,
+    client_name: 'Ojon Tech',
+    total: 50000,
     due_date: '2024-03-10',
-    status: 'Overdue'
+    status: 'Paid',
+    created_at: '2024-03-13T10:00:00Z'
+  },
+  {
+    id: '4',
+    invoice_number: 'INV-004',
+    client_name: 'TOCHUKWU',
+    total: 0,
+    due_date: '2024-03-12',
+    status: 'Draft',
+    created_at: '2024-03-12T10:00:00Z'
+  },
+  {
+    id: '5',
+    invoice_number: 'INV-001', // Duplicate invoice number - should be filtered out
+    client_name: 'ABC Corp',
+    total: 45000,
+    due_date: '2024-03-20',
+    status: 'Draft',
+    created_at: '2024-03-10T08:00:00Z'
+  },
+  {
+    id: '6',
+    invoice_number: 'INV-005',
+    client_name: 'Tech Startup',
+    total: 120000,
+    due_date: '2024-03-25',
+    status: 'Sent',
+    created_at: '2024-03-16T14:00:00Z'
+  },
+  {
+    id: '7',
+    invoice_number: 'INV-006',
+    client_name: 'Design Agency',
+    total: 85000,
+    due_date: '2024-03-18',
+    status: 'Overdue',
+    created_at: '2024-03-11T09:00:00Z'
+  },
+  {
+    id: '8',
+    invoice_number: 'INV-002', // Duplicate - should be filtered out
+    client_name: 'XYZ Ltd',
+    total: 70000,
+    due_date: '2024-03-15',
+    status: 'Draft',
+    created_at: '2024-03-09T12:00:00Z'
   }
 ]
 
@@ -60,7 +110,7 @@ export default function DashboardPage() {
         return
       }
 
-      // Fetch invoices
+      // Fetch invoices - deduplicate by invoice_number, keep most recent, limit to 10
       const { data: invoicesData } = await supabase
         .from('invoices')
         .select('*')
@@ -68,16 +118,75 @@ export default function DashboardPage() {
         .order('created_at', { ascending: false })
 
       if (invoicesData) {
-        setInvoices(invoicesData)
+        // Deduplicate by invoice_number, keeping only the most recent one by created_at
+        const uniqueInvoices = new Map<string, Invoice>()
+        invoicesData.forEach(invoice => {
+          const existing = uniqueInvoices.get(invoice.invoice_number)
+          if (!existing || new Date(invoice.created_at) > new Date(existing.created_at)) {
+            uniqueInvoices.set(invoice.invoice_number, invoice)
+          }
+        })
+
+        // Convert back to array, limit to 10, and sort by created_at descending
+        const deduplicatedInvoices = Array.from(uniqueInvoices.values())
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 10)
+
+        setInvoices(deduplicatedInvoices)
       }
     }
     checkAuth()
   }, [router])
 
   const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.total, 0)
-  const amountPaid = invoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.total, 0)
-  const amountPending = invoices.filter(inv => inv.status !== 'Paid').reduce((sum, inv) => sum + inv.total, 0)
+  const amountPaid = invoices.filter(inv => inv.status.toLowerCase() === 'paid').reduce((sum, inv) => sum + inv.total, 0)
+  const amountPending = invoices.filter(inv => inv.status.toLowerCase() !== 'paid').reduce((sum, inv) => sum + inv.total, 0)
   const invoiceCount = invoices.length
+
+  // Prepare chart data
+  const getMonthlyIncomeData = () => {
+    const last6Months = []
+    const now = new Date()
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      const monthInvoices = invoices.filter(inv => {
+        const invDate = new Date(inv.created_at)
+        return invDate.getMonth() === date.getMonth() && invDate.getFullYear() === date.getFullYear()
+      })
+      const total = monthInvoices.reduce((sum, inv) => sum + inv.total, 0)
+      last6Months.push({
+        month: monthName,
+        amount: total,
+        isCurrentMonth: i === 0
+      })
+    }
+    return last6Months
+  }
+
+  const getPaymentStatusData = () => {
+    return [
+      { name: 'Paid', value: amountPaid, color: '#006B3C' },
+      { name: 'Pending', value: amountPending, color: '#dc2626' }
+    ]
+  }
+
+  const getTopClientsData = () => {
+    const clientTotals = invoices.reduce((acc, inv) => {
+      acc[inv.client_name] = (acc[inv.client_name] || 0) + inv.total
+      return acc
+    }, {} as Record<string, number>)
+
+    return Object.entries(clientTotals)
+      .filter(([, total]) => total > 0)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 5)
+      .map(([name, total]) => ({ name, total }))
+  }
+
+  const monthlyIncomeData = getMonthlyIncomeData()
+  const paymentStatusData = getPaymentStatusData()
+  const topClientsData = getTopClientsData()
 
   const handleView = (id: string) => {
     router.push(`/invoice/${id}`)
@@ -154,6 +263,87 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Income Dashboard Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Monthly Income Bar Chart */}
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Income This Year</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={monthlyIncomeData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis tickFormatter={(value) => `₦${(value / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  formatter={(value: any) => [`₦${(value as number).toLocaleString()}`, 'Amount']}
+                  labelStyle={{ color: '#000' }}
+                />
+                <Bar
+                  dataKey="amount"
+                  fill="#006B3C"
+                >
+                  {monthlyIncomeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.isCurrentMonth ? '#FFB800' : '#006B3C'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Payment Status Pie Chart */}
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Status</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={paymentStatusData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {paymentStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: any) => `₦${(value as number).toLocaleString()}`} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Top Clients */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Clients</h3>
+          <div className="space-y-4">
+            {topClientsData.map((client, index) => {
+              const maxAmount = topClientsData[0]?.total || 1
+              const percentage = (client.total / maxAmount) * 100
+              return (
+                <div key={client.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-gray-600 w-6">{index + 1}.</span>
+                    <span className="text-sm font-medium text-gray-900">{client.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3 flex-1 ml-4">
+                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-[#006B3C] h-2 rounded-full"
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900 min-w-[80px] text-right">
+                      ₦{client.total.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Invoices Table */}
         <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -199,8 +389,11 @@ export default function DashboardPage() {
                       {new Date(invoice.due_date).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusColors[invoice.status]}`}>
-                        {invoice.status}
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        statusColors[invoice.status as keyof typeof statusColors] || 
+                        (invoice.status.toLowerCase() === 'paid' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')
+                      }`}>
+                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1).toLowerCase()}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

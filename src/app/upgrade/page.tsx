@@ -12,6 +12,7 @@ interface Profile {
   account_number: string
   account_name: string
   plan?: string
+  logo_url?: string
 }
 
 export default function UpgradePage() {

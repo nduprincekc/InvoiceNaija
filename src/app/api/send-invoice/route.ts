@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 interface LineItem {
   description: string
@@ -33,6 +38,8 @@ interface Profile {
   bank_name: string
   account_number: string
   account_name: string
+  plan?: string
+  logo_url?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -43,21 +50,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invoice ID is required' }, { status: 400 })
     }
 
-    // Get authenticated user
+    // Get authenticated user to verify they are logged in
     const authHeader = request.headers.get('Authorization')
     if (!authHeader) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Fetch invoice
-    const { data: invoice, error: invoiceError } = await supabase
+    // Fetch invoice using admin client (bypasses RLS)
+    const { data: invoice, error: invoiceError } = await supabaseAdmin
       .from('invoices')
       .select('*')
       .eq('id', invoiceId)
@@ -68,8 +75,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
     }
 
-    // Fetch profile
-    const { data: profile, error: profileError } = await supabase
+    // Fetch profile using admin client (bypasses RLS)
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('id', user.id)
@@ -139,8 +146,17 @@ function generateInvoiceEmailHTML(invoice: Invoice, profile: Profile): string {
     <body>
       <div class="container">
         <div class="header">
-          <h1>InvoiceNaija</h1>
-          <p>Professional Invoicing Made Easy</p>
+          ${profile.logo_url && profile.plan === 'premium' ?
+            `<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 10px;">
+              <img src="${profile.logo_url}" alt="${profile.business_name} logo" style="height: 60px; width: auto; object-fit: contain;" />
+              <div>
+                <h1 style="margin: 0; font-size: 28px;">${profile.business_name}</h1>
+                <p style="margin: 5px 0; color: #666;">Professional Invoicing Made Easy</p>
+              </div>
+            </div>` :
+            `<h1>InvoiceNaija</h1>
+            <p>Professional Invoicing Made Easy</p>`
+          }
         </div>
 
         <div style="text-align: center; margin-bottom: 30px;">
