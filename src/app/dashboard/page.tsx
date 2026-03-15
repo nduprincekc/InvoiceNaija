@@ -128,7 +128,7 @@ export default function DashboardPage() {
         })
 
         // Convert back to array, limit to 10, and sort by created_at descending
-        const deduplicatedInvoices = Array.from(uniqueInvoices.values())
+        const deduplicatedInvoices: Invoice[] = Array.from(uniqueInvoices.values())
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, 10)
 
