@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+// import { Resend } from 'resend'
 
 interface LineItem {
   description: string
@@ -35,8 +37,6 @@ interface Profile {
 
 export async function POST(request: NextRequest) {
   try {
-    const { createClient } = await import('@supabase/supabase-js')
-
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     const resendKey = process.env.RESEND_API_KEY
